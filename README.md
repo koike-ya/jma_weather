@@ -2,14 +2,15 @@
 
 ソースコードをクローンする
 ```
-git clone https://github.com/Tomoya-K-0504/research.git
-cd research/weather
+git clone https://github.com/Tomoya-K-0504/jma_weather.git
+cd jma_weather
 ```
 
 pythonの仮想環境を作成する。anacondaを使う場合を記載する。
 ```
 conda -V # condaが使えることを確認
 conda create -n weather python=3.6
+source activate weather
 ```
 
 必要なライブラリをインストールする
@@ -17,10 +18,10 @@ conda create -n weather python=3.6
 pip install -r requirements.txt
 ```
 
+ここで、下記に記載の フォルダ構成 のように、郵便番号が書かれたファイルをweather直下に配置する
+
 実行
 ```
-source activate weather
-cd weather
 python zip2weather.py zip20181105.xlsx # 引数には郵便番号を読み込ませるエクセルファイル名を指定 
 ```
 
