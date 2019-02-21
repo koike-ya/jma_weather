@@ -135,26 +135,12 @@ if __name__ == "__main__":
     source_df = pd.read_excel(input_excel_name)
     aggregated_df = pd.DataFrame()
 
-    # 郵便局の住所に載っていない郵便番号を振り分けるのに使用した。
-    # not_on_zipcode_list(source_df)
-
-    # with open("not_on_zipcode_list.txt") as f:
-    #     not_on_zipcode_list = f.read().split("\n")[:-1]
-    # not_on_zipcode_list = [int(zipcode) for zipcode in not_on_zipcode_list]
-
     # 郵便局の郵便番号リストを読み込む
     df = pd.read_csv(Path(__file__).parent.resolve() / "KEN_ALL.CSV", encoding='shift-jis')
     postcode_list = list(set(df.iloc[:, 2].values))
     pref_list = df.iloc[:, 6].values
 
-    count_2 = 0
-
-    # 既にスクレイプしたファイルリストを読み込む
-    # if Path("finished_list.txt").exists():
-    #     with open(Path("finished_list.txt"), "r") as f:
-    #         finished_list = f.read().split("\n")[:-1]
-
-    Path("tmp").mkdir(exist_ok=True)
+    Path("data").mkdir(exist_ok=True)
 
     # 郵便局のcsvにもapiにもないzipcodeの場合に使用する.
     pref_dict = {"7611400": "香川県", "791561": "北海道", "4280021": "静岡県", "5203243": "滋賀県", "5010801": "岐阜県",
@@ -163,27 +149,15 @@ if __name__ == "__main__":
     # 各データごとに、開始日の天気と終了日の天気をスクレイピングする
     for i, row in source_df.iterrows():
 
-        # 既にスクレイプしたファイルリストに含まれていればスキップ
-        # if row["folder"] in finished_list:
-        #     continue
-
         # 元データに郵便番号がはいっていない場合
         if pd.isna(row["zip"]):
             with open("failure_list.txt", "a") as f:
                 f.write(str(row["folder"]) + "," + str(row["zip"]) + "\n")
             continue
 
-        # 郵便局のデータに載っていないリストに郵便番号が入っている場合
-        # if int(row["zip"]) not in not_on_zipcode_list:
-        #     count_2 += 1
-            # print(count_2)
-            # continue
-
-        save_folder = Path("tmp") / row["folder"]
+        save_folder = Path("data") / row["folder"]
         # 既にフォルダが作られている かつ フォルダの中身が3つとも入っている場合
         if save_folder.exists() and len(list(save_folder.iterdir())) == 3:
-            count_2 += 1
-            # print(count_2)
             continue
 
         # 被験者IDでフォルダを作成する.

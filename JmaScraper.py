@@ -8,6 +8,15 @@ import requests
 from bs4 import BeautifulSoup
 
 
+def access_site(url):
+    # スクレイピング先のサーバーに負荷がかかりすぎないよう、0.5秒おく
+    time.sleep(0.5)
+    html = requests.get(url).content
+    soup = BeautifulSoup(html, "lxml")
+
+    return html, soup
+
+
 class JmaScraper:
     def __init__(self, pref, year="", month="", day="", prec_no="", block_no="", mode='daily'):
         """
