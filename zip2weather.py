@@ -59,6 +59,7 @@ def zip2pref(postal):
         print(f"postcode {postal} is not in jp_post postcode list.")
         pref_name = zip_api(postal)
 
+    # apiを使ってもpref_nameの取得に失敗した場合、pref_dictにある県名を取得する.
     return pref_name if pref_name else pref_dict[str(postal)]
 
 
@@ -137,6 +138,8 @@ def zip2weather(pref_name, sdate, edate, mode='daily', duration=0):
 
 
 def main(source_df):
+    source_df.reset_index(drop=True, inplace=True)
+
     for i, row in tqdm(source_df.iterrows()):
 
         # 元データに郵便番号がはいっていない場合
@@ -152,6 +155,12 @@ def main(source_df):
             continue
 
         save_folder = (Path(__file__).parent.resolve() / "data") / row["folder"]
+
+        # block_no に変更があった県のみ削除. temporally
+        if row['prefecture'] in ['tokyo', 'chiba', 'shizuoka', 'kyoto', 'okinawa']:
+            [p.unlink() for p in save_folder.iterdir()]
+            save_folder.rmdir()
+
         # 既にフォルダが作られている かつ フォルダの中身が3つとも入っている場合
         if save_folder.exists() and len(list(save_folder.iterdir())) == 3:
             continue
@@ -160,10 +169,6 @@ def main(source_df):
         save_folder.mkdir(exist_ok=True, parents=True)
 
         pref_name = zip2pref(int(row["zip"]))
-
-        # apiを使ってもpref_nameの取得に失敗した場合、pref_dictにある県名を取得する.
-        if not pref_name:
-            pref_name = pref_dict[str(int(row["zip"]))]
 
         # 1時間毎の天気を取得して保存
         start_df, end_df = zip2weather(pref_name, row["sday"], row["eday"], mode='hourly', duration=1)
@@ -175,8 +180,8 @@ def main(source_df):
         daily_df.to_csv(save_folder / "daily.csv", index=False, encoding='shift_jis')
         # aggregated_df = pd.concat([aggregated_df, daily_df], axis=0)
 
-        if i % 100 == 0:
-            print(f"{i} data finished")
+        if (i * 100 // source_df.shape[0]) % 25 == 0:
+            print(f"{i * 100 // source_df.shape[0]}% finished")
     #
     # aggregated_df = pd.concat([source_df, aggregated_df.reset_index(drop=True)], axis=1)
 
@@ -191,7 +196,7 @@ if __name__ == "__main__":
 
     # 各データごとに、開始日の天気と終了日の天気をスクレイピングする
     # main(source_df)
-    n_proc = 100
+    n_proc = 2
     n_rows_in_proc = source_df.shape[0] // n_proc
     for i in range(n_proc):
         p = Process(target=main, args=(source_df.iloc[i * n_rows_in_proc:(i + 1) * n_rows_in_proc - 1, :],))

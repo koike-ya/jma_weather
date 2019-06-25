@@ -71,8 +71,9 @@ class JmaScraper:
         気象庁の天気情報で県ごとに割り当てられているコードをcsvで保存する. 保存されていれば読み込んで返す
         :return: dataframeで、カラムに 県名,code を持つ
         """
-        if Path("prec_block_code.csv").exists():
-            return pd.read_csv("prec_block_code.csv")
+        if Path(Path(__file__).parent.resolve() / "prec_block_code.csv").exists():
+            # 埼玉だけ熊谷で、それ以外は県庁所在地. 下のスクレイピング後に修正した.
+            return pd.read_csv(Path(__file__).parent.resolve() / "prec_block_code.csv")
 
         url = "http://www.data.jma.go.jp/obd/stats/etrn/select/prefecture00.php"
         html, soup = access_site(url)
@@ -86,7 +87,7 @@ class JmaScraper:
             columns_dict["prec_no"] = [int(re.search("\d\d", point["href"]).group())]
             columns_dict["block_no"] = [self._find_block_no(self, columns_dict["prec_no"][0])]
             prec_block_no_df = pd.concat([prec_block_no_df, pd.DataFrame.from_dict(columns_dict)], axis=0)
-        prec_block_no_df.to_csv("prec_block_code.csv", index=False)
+        prec_block_no_df.to_csv(Path(__file__).parent.resolve() / "prec_block_code.csv", index=False)
 
         return prec_block_no_df
 
@@ -114,7 +115,8 @@ class JmaScraper:
             df = self._scrape_table(soup)
             # もし最右下段、つまり天気がnanじゃなかったら、block_noを返却
             if not pd.isna(df.iloc[-1, -1]):
-                return block_no
+                # return block_no
+                a = 1
 
     def search_observatory(self, prec_no):
         """
