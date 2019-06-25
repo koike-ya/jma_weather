@@ -156,11 +156,6 @@ def main(source_df):
 
         save_folder = (Path(__file__).parent.resolve() / "data") / row["folder"]
 
-        # block_no に変更があった県のみ削除. temporally
-        if row['prefecture'] in ['tokyo', 'chiba', 'shizuoka', 'kyoto', 'okinawa']:
-            [p.unlink() for p in save_folder.iterdir()]
-            save_folder.rmdir()
-
         # 既にフォルダが作られている かつ フォルダの中身が3つとも入っている場合
         if save_folder.exists() and len(list(save_folder.iterdir())) == 3:
             continue
