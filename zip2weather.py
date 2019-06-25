@@ -1,17 +1,19 @@
 import sys
-import time
 from datetime import timedelta
+from multiprocessing import Process
 from pathlib import Path
 
 import pandas as pd
 import requests
-from JmaScraper import JmaScraper
 from bs4 import BeautifulSoup
+from tqdm import tqdm
+
+from JmaScraper import JmaScraper
 
 
 def access_site(url):
     # スクレイピング先のサーバーに負荷がかかりすぎないよう、0.5秒おく
-    time.sleep(0.5)
+    # time.sleep(0.5)
     html = requests.get(url).content
     soup = BeautifulSoup(html, "lxml")
 
@@ -20,7 +22,7 @@ def access_site(url):
 
 def zip_api(postal):
     """
-    apiにアクセスして、郵便番号をキーにして県名を返す. 取得に失敗した場合はNaneを返す
+    apiにアクセスして、郵便番号をキーにして県名を返す. 取得に失敗した場合はNoneを返す
     :param postal: 郵便番号
     :return: pref_name
     """
@@ -29,28 +31,35 @@ def zip_api(postal):
     try:
         pref_name = content.split("\",\"")[12]
     except IndexError as e:
-        print(e)
-        print(postal)
-        print(content.split("\",\""))
+        print(f'postcode {postal} is not in zip api.')
         return None
     return pref_name
 
 
-def zip2pref(postal, postal_list, pref_list):
+def zip2pref(postal):
     """
     郵便局が提供しているcsvを使って、郵便番号と都道府県名を取得し、引数に該当する都道府県名を返す.
     csvに載っていない場合(事業所の郵便番号等)は、apiにアクセスして取得する.
     :param postal:
-    res['postal'], res['prefecture'], res['city'], res['town'], res['y'], res['x']
     :return: 6570805, 兵庫県, 神戸市灘区, 青谷町一丁目, 34.712429, 135.214521
     """
+    # 郵便局の郵便番号リストを読み込む
+    df = pd.read_csv(Path(__file__).parent.resolve() / "KEN_ALL.CSV", encoding='shift-jis', header=None)
+    postal_pref_df = df.iloc[:, [2, 6]]
+    postal_pref_df.columns = ['postal', 'pref']
+    postal_list = df.iloc[:, 2].values
+
+    # 郵便局のcsvにもapiにもないzipcodeの場合に使用する.
+    pref_dict = {"7611400": "香川県", "791561": "北海道", "4280021": "静岡県", "5203243": "滋賀県", "5010801": "岐阜県",
+                 "4618701": "愛知県"}
+
     if postal in postal_list:
-        index = postal_list.index(postal)
+        return postal_pref_df[postal_pref_df['postal'] == postal]['pref'].values[0]
     else:
         print(f"postcode {postal} is not in jp_post postcode list.")
-        return zip_api(postal)
+        pref_name = zip_api(postal)
 
-    return pref_list[index]
+    return pref_name if pref_name else pref_dict[str(postal)]
 
 
 def not_on_zipcode_list(source_df):
@@ -88,8 +97,8 @@ def zip2weather(pref_name, sdate, edate, mode='daily', duration=0):
 
     # 日毎では、日付の指定がありdurationを考慮する必要がない.
     if mode == 'daily':
-        daily_columns = ["temperature_mean", "temperature_max", "temperature_min", "humidity_mean", "weather_noon",
-                         "weather_night"]
+        daily_columns = ["air_pressure_local", "air_pressure_sea", "temperature_mean", "temperature_max",
+                         "temperature_min", "humidity_mean", "weather_noon", "weather_night"]
         yesterday = sdate - timedelta(days=1)
         yesterday_df = JmaScraper(pref_name, year=yesterday.year, month=yesterday.month, day=yesterday.day).scrape()
         start_daily_df = JmaScraper(pref_name, year=sdate.year, month=sdate.month, day=sdate.day).scrape()
@@ -127,35 +136,22 @@ def zip2weather(pref_name, sdate, edate, mode='daily', duration=0):
     return hourly_df_list
 
 
-if __name__ == "__main__":
-
-    input_excel_name = sys.argv[1]
-
-    # エクセルデータ
-    source_df = pd.read_excel(input_excel_name)
-    aggregated_df = pd.DataFrame()
-
-    # 郵便局の郵便番号リストを読み込む
-    df = pd.read_csv(Path(__file__).parent.resolve() / "KEN_ALL.CSV", encoding='shift-jis')
-    postcode_list = list(set(df.iloc[:, 2].values))
-    pref_list = df.iloc[:, 6].values
-
-    Path("data").mkdir(exist_ok=True)
-
-    # 郵便局のcsvにもapiにもないzipcodeの場合に使用する.
-    pref_dict = {"7611400": "香川県", "791561": "北海道", "4280021": "静岡県", "5203243": "滋賀県", "5010801": "岐阜県",
-                 "4618701": "愛知県"}
-
-    # 各データごとに、開始日の天気と終了日の天気をスクレイピングする
-    for i, row in source_df.iterrows():
+def main(source_df):
+    for i, row in tqdm(source_df.iterrows()):
 
         # 元データに郵便番号がはいっていない場合
         if pd.isna(row["zip"]):
             with open("failure_list.txt", "a") as f:
-                f.write(str(row["folder"]) + "," + str(row["zip"]) + "\n")
+                f.write(f"{row['folder']},{row['zip']},zipcode empty\n")
             continue
 
-        save_folder = Path("data") / row["folder"]
+        # 元データに実験日が入っていない場合
+        if pd.isna(row["sday"]) or pd.isna(row["eday"]):
+            with open("failure_list.txt", "a") as f:
+                f.write(f"{row['folder']},{row['zip']},sday or eday empty\n")
+            continue
+
+        save_folder = (Path(__file__).parent.resolve() / "data") / row["folder"]
         # 既にフォルダが作られている かつ フォルダの中身が3つとも入っている場合
         if save_folder.exists() and len(list(save_folder.iterdir())) == 3:
             continue
@@ -163,7 +159,7 @@ if __name__ == "__main__":
         # 被験者IDでフォルダを作成する.
         save_folder.mkdir(exist_ok=True, parents=True)
 
-        pref_name = zip2pref(int(row["zip"]), postcode_list, pref_list)
+        pref_name = zip2pref(int(row["zip"]))
 
         # apiを使ってもpref_nameの取得に失敗した場合、pref_dictにある県名を取得する.
         if not pref_name:
@@ -177,10 +173,26 @@ if __name__ == "__main__":
         # 一日毎の天気を取得
         daily_df = zip2weather(pref_name, row["sday"], row["eday"], mode='daily')
         daily_df.to_csv(save_folder / "daily.csv", index=False, encoding='shift_jis')
-        aggregated_df = pd.concat([aggregated_df, daily_df], axis=0)
+        # aggregated_df = pd.concat([aggregated_df, daily_df], axis=0)
 
         if i % 100 == 0:
             print(f"{i} data finished")
+    #
+    # aggregated_df = pd.concat([source_df, aggregated_df.reset_index(drop=True)], axis=1)
 
-    aggregated_df = pd.concat([source_df, aggregated_df.reset_index(drop=True)], axis=1)
-    pass
+
+if __name__ == "__main__":
+
+    input_excel_name = sys.argv[1]
+    # エクセルデータ
+    source_df = pd.read_excel(input_excel_name)
+
+    (Path(__file__).parent.resolve() / "data").mkdir(exist_ok=True)
+
+    # 各データごとに、開始日の天気と終了日の天気をスクレイピングする
+    # main(source_df)
+    n_proc = 100
+    n_rows_in_proc = source_df.shape[0] // n_proc
+    for i in range(n_proc):
+        p = Process(target=main, args=(source_df.iloc[i * n_rows_in_proc:(i + 1) * n_rows_in_proc - 1, :],))
+        p.start()

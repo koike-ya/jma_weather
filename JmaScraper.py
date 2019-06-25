@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 
 def access_site(url):
     # スクレイピング先のサーバーに負荷がかかりすぎないよう、0.5秒おく
-    time.sleep(0.5)
+    # time.sleep(0.5)
     html = requests.get(url).content
     soup = BeautifulSoup(html, "lxml")
 
@@ -39,7 +39,6 @@ class JmaScraper:
         self.pref_select_page_url = f"http://www.data.jma.go.jp/obd/stats/etrn/select/prefecture.php?prec_no="
         self._fill_prec_block_no(self)    # 県名からprec_noとblock_noを補完する
         # self._fill_block_no(self)   # 途中でblock_noを変更する
-
 
     @staticmethod
     def _update_base_url(self, **kwargs) -> None:
@@ -158,7 +157,10 @@ class JmaScraper:
         :return: 天気のテーブルが格納されたdataframe
         """
         table = soup.find("table", class_=class_name)
-        df = pd.read_html(table.prettify(), header=0)[0]
+        try:
+            df = pd.read_html(table.prettify(), header=0)[0]
+        except AttributeError as e:
+            a = ''
 
         return df
 
@@ -170,7 +172,7 @@ class JmaScraper:
         :return: 天気一覧図のdataframe
         """
         self._update_base_url(self)
-        time.sleep(0.5)
+        # time.sleep(0.5)
         html = requests.get(self.base_url).content
         soup = BeautifulSoup(html, "lxml")
 
