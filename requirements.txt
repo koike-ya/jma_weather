@@ -1,6 +1,6 @@
 matplotlib==3.0.1
 beautifulsoup4==4.6.3
-nltk==3.3
+nltk==3.4.5
 numpy==1.15.3
 pandas==0.23.4
 scikit-learn==0.20.0
